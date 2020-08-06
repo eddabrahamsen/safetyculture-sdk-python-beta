@@ -15,7 +15,8 @@ from builtins import input
 from datetime import datetime
 import multiprocessing
 from multiprocessing.pool import ThreadPool
-from tqdm import tqdm, trange
+from tqdm import tqdm
+from questionary import prompt
 
 import requests
 from getpass import getpass
@@ -25,6 +26,44 @@ GUID_PATTERN = (
     "[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}$"
 )
 HTTP_USER_AGENT_ID = "safetyculture-python-sdk"
+
+
+def interactive_login():
+    login_questions = [
+        {
+            'type': 'input',
+            'name': 'username',
+            'message': 'Your iAuditor username (should be your email address.)'
+        },
+        {
+            'type': 'password',
+            'name': 'password',
+            'message': 'Your iAuditor Password'
+        }
+    ]
+    login = prompt(login_questions)
+    username = login['username']
+    password = login['password']
+    generate_token_url = "https://api.safetyculture.io/auth"
+    payload = {
+        "username": username,
+        "password": password,
+        "grant_type": "password"
+    }
+    headers = {
+        'content-type': "application/x-www-form-urlencoded",
+        'cache-control': "no-cache",
+    }
+    response = requests.request("POST", generate_token_url, data=payload, headers=headers)
+    if response.status_code == requests.codes.ok:
+        print('Token successfully obtained, continuing to export.')
+        return response.json()['access_token']
+    else:
+        if 'error_description' in response.json():
+            print('Error: ' + str(response.json()['error_description']))
+        else:
+            print('An error occurred calling ' + generate_token_url + ': ' + str(response.json()))
+        return None
 
 
 def get_user_api_token(logger):
@@ -58,15 +97,15 @@ def get_user_api_token(logger):
 
 class SafetyCulture:
     def __init__(
-        self, api_token, proxy_settings=None, certificate_settings=None, ssl_verify=None
+            self, api_token, proxy_settings=None, certificate_settings=None, ssl_verify=None
     ):
         self.current_dir = os.getcwd()
         self.log_dir = self.current_dir + "/log/"
         self.api_url = "https://api.safetyculture.io/"
         self.audit_url = self.api_url + "audits/"
         self.template_search_url = (
-            self.api_url
-            + "templates/search?field=template_id&field=name&field=modified_at"
+                self.api_url
+                + "templates/search?field=template_id&field=name&field=modified_at"
         )
         self.response_set_url = self.api_url + "response_sets"
         self.get_my_groups_url = self.api_url + "share/connections"
@@ -126,7 +165,7 @@ class SafetyCulture:
         length = 0
         for i in range(0, len(lst), n):
             length += 1
-            yield lst[i : i + n]
+            yield lst[i: i + n]
 
     def raise_pool(self, list_of_audits):
         # Establish the Pool
@@ -149,7 +188,7 @@ class SafetyCulture:
         self.L.append(downloaded_audit)
 
     def requests_exceptions(
-        self, url, request_to_make, headers=None, wait_time=1, data=None
+            self, url, request_to_make, headers=None, wait_time=1, data=None
     ):
         if headers is None:
             headers = self.custom_http_headers
@@ -296,15 +335,15 @@ class SafetyCulture:
                 raise
 
     def discover_audits(
-        self,
-        template_id=None,
-        modified_after=None,
-        modified_before=None,
-        completed=True,
-        archived=False,
-        limit=1000,
-        order="asc",
-        backlog=[],
+            self,
+            template_id=None,
+            modified_after=None,
+            modified_before=None,
+            completed=True,
+            archived=False,
+            limit=1000,
+            order="asc",
+            backlog=[],
     ):
         """
         Return IDs of all completed audits if no parameters are passed, otherwise restrict search
@@ -350,9 +389,9 @@ class SafetyCulture:
         else:
             archived = archived
         search_url = (
-            self.audit_url
-            + f"search?field=audit_id&field=modified_at&order={order}&limit={limit}"
-            f"&modified_after={last_modified}&modified_before={modified_before}"
+                self.audit_url
+                + f"search?field=audit_id&field=modified_at&order={order}&limit={limit}"
+                  f"&modified_after={last_modified}&modified_before={modified_before}"
         )
         # search_url = self.audit_url + 'search?field=audit_id&field=modified_at&order={}&limit={}&
         # modified_after='.format(order, limit) \
@@ -389,10 +428,10 @@ class SafetyCulture:
         result = response.json() if response.status_code == requests.codes.ok else None
         number_discovered = str(result["total"]) if result is not None else "0"
         log_message = (
-            "on audit_discovery: "
-            + number_discovered
-            + " discovered using "
-            + search_url
+                "on audit_discovery: "
+                + number_discovered
+                + " discovered using "
+                + search_url
         )
 
         self.log_http_status(response.status_code, log_message)
@@ -455,7 +494,7 @@ class SafetyCulture:
         return result
 
     def get_export_job_id(
-        self, audit_id, preference_id=None, export_format=DEFAULT_EXPORT_FORMAT
+            self, audit_id, preference_id=None, export_format=DEFAULT_EXPORT_FORMAT
     ):
         """
         Request export job ID from API and return it
@@ -571,7 +610,7 @@ class SafetyCulture:
             )
 
     def get_export(
-        self, audit_id, preference_id=None, export_format=DEFAULT_EXPORT_FORMAT
+            self, audit_id, preference_id=None, export_format=DEFAULT_EXPORT_FORMAT
     ):
         """
         Obtain exported document from API and return string representation of it
@@ -660,7 +699,7 @@ class SafetyCulture:
         )
 
     def get_page_of_actions(
-        self, logger, date_modified, previous_page, offset=0, page_length=100
+            self, logger, date_modified, previous_page, offset=0, page_length=100
     ):
         """
         Returns a page of action search results
@@ -886,11 +925,11 @@ class SafetyCulture:
         logger = logging.getLogger("sp_logger")
         status_description = requests.status_codes._codes[status_code][0]
         log_string = (
-            str(status_code)
-            + " ["
-            + status_description
-            + "] status received "
-            + message
+                str(status_code)
+                + " ["
+                + status_description
+                + "] status received "
+                + message
         )
         logger.info(log_string) if status_code == requests.codes.ok else logger.error(
             log_string

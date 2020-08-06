@@ -13,6 +13,7 @@ future = ">=0.18.2"
 requests = ">=2.22.0"
 pyyaml = ">=5.3"
 tqdm = "^4.48.2"
+questionary = "^1.5.2"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"

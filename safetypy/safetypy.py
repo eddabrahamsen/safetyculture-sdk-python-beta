@@ -385,9 +385,10 @@ class SafetyCulture:
         else:
             completed = completed
         if type(archived) is not bool:
-            logger.warning("Archived must be either true or false. Defaulting to false")
+            if archived == "both":
+                archived = archived
         else:
-            archived = archived
+            logger.warning("Archived must be either true or false. Defaulting to false")
         search_url = (
                 self.audit_url
                 + f"search?field=audit_id&field=modified_at&order={order}&limit={limit}"

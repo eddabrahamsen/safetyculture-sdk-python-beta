@@ -185,7 +185,8 @@ class SafetyCulture:
         # Appends downloaded audits to a shared list (L)
         audit_id = audit_id["audit_id"]
         downloaded_audit = self.get_audit(audit_id)
-        self.L.append(downloaded_audit)
+        if downloaded_audit:
+            self.L.append(downloaded_audit)
 
     def requests_exceptions(
             self, url, request_to_make, headers=None, wait_time=1, data=None
@@ -196,9 +197,9 @@ class SafetyCulture:
             if request_to_make == "get":
                 response = requests.get(url, headers=headers)
             elif request_to_make == "post":
-                response = requests.post(url, data, headers=headers)
+                response = requests.post(url, data=data, headers=headers)
             elif request_to_make == "put":
-                response = requests.put(url, data, headers=headers)
+                response = requests.put(url, data=data, headers=headers)
             elif request_to_make == "delete":
                 response = requests.delete(url, headers=headers)
             else:
@@ -244,12 +245,12 @@ class SafetyCulture:
         return response
 
     def authenticated_request_post(self, url, data):
-        headers = self.custom_http_headers["content-type"] = "application/json"
+        self.custom_http_headers["content-type"] = "application/json"
+        headers = self.custom_http_headers
         request_to_make = "post"
         response = self.requests_exceptions(
             url, request_to_make, headers=headers, data=data
         )
-        # response = requests.post(url, data, headers=self.custom_http_headers)
         del self.custom_http_headers["content-type"]
         return response
 
@@ -259,7 +260,6 @@ class SafetyCulture:
         response = self.requests_exceptions(
             url, request_to_make, headers=headers, data=data
         )
-        # response = requests.put(url, data, headers=self.custom_http_headers)
         del self.custom_http_headers["content-type"]
         return response
 
@@ -387,16 +387,13 @@ class SafetyCulture:
         if type(archived) is not bool:
             if archived == "both":
                 archived = archived
-        else:
-            logger.warning("Archived must be either true or false. Defaulting to false")
+            else:
+                logger.warning("Archived must be either true or false. Defaulting to false")
         search_url = (
                 self.audit_url
                 + f"search?field=audit_id&field=modified_at&order={order}&limit={limit}"
                   f"&modified_after={last_modified}&modified_before={modified_before}"
         )
-        # search_url = self.audit_url + 'search?field=audit_id&field=modified_at&order={}&limit={}&
-        # modified_after='.format(order, limit) \
-        #     + last_modified
         log_string = "\nInitiating audit_discovery with the parameters: " + "\n"
         log_string += "template_id    = " + str(template_id) + "\n"
         log_string += "modified_after = " + str(last_modified) + "\n"
@@ -437,27 +434,38 @@ class SafetyCulture:
 
         self.log_http_status(response.status_code, log_message)
 
-        if "total" in result:
-            if int(result["total"]) > 1000 or backlog != []:
-                backlog.extend(result["audits"])
-                # print('Backlog Length ', len(backlog))
-                if result["audits"] and len(backlog) < 500000:
-                    new_modified_after = result["audits"][len(result["audits"]) - 1][
-                        "modified_at"
-                    ]
-                    self.discover_audits(
-                        template_id=template_id,
-                        completed=completed,
-                        archived=archived,
-                        modified_after=new_modified_after,
-                        backlog=backlog,
-                    )
-                result = {
-                    "count": len(backlog),
-                    "total": len(backlog),
-                    "audits": backlog,
-                }
-
+        if result is not None:
+            if "total" in result:
+                if int(result["total"]) > 1000 or backlog != []:
+                    backlog.extend(result["audits"])
+                    # print('Backlog Length ', len(backlog))
+                    if result["audits"] and len(backlog) < 500000:
+                        new_modified_after = result["audits"][len(result["audits"]) - 1][
+                            "modified_at"
+                        ]
+                        self.discover_audits(
+                            template_id=template_id,
+                            completed=completed,
+                            archived=archived,
+                            modified_after=new_modified_after,
+                            backlog=backlog,
+                        )
+                    result = {
+                        "count": len(backlog),
+                        "total": len(backlog),
+                        "audits": backlog,
+                    }
+            if len(result['audits']) > 1000:
+                dupe_removal = []
+                new_audits = []
+                show_dupes = []
+                for audit in result['audits']:
+                    if audit['audit_id'] not in dupe_removal:
+                        dupe_removal.append(audit['audit_id'])
+                        new_audits.append(audit)
+                    else:
+                        show_dupes.append(audit)
+                result['audits'] = new_audits
         return result
 
     def discover_templates(self, modified_after=None, modified_before=None):
@@ -662,8 +670,8 @@ class SafetyCulture:
 
     def get_audit_actions(self, date_modified, offset=0, page_length=100):
         """
-        Get all actions created after a specified date. If the number of actions found is more than 100, this function will
-        page until it has collected all actions
+        Get all actions created after a specified date. If the number of actions found is more than 100,
+        this function will page until it has collected all actions
 
         :param date_modified:   ISO formatted date/time string. Only actions created after this date are are returned.
         :param offset:          The index to start retrieving actions from
